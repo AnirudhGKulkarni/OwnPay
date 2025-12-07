@@ -136,5 +136,49 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/transactions", async (_req, res) => {
+    try {
+      const transactions = await storage.getTransactions();
+      return res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      return res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+  });
+
+  app.put("/api/accounts/:id", async (req, res) => {
+    try {
+      const parsed = insertBankAccountSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: parsed.error.flatten() 
+        });
+      }
+      
+      const account = await storage.updateBankAccount(req.params.id, parsed.data);
+      if (!account) {
+        return res.status(404).json({ error: "Bank account not found" });
+      }
+      return res.json(account);
+    } catch (error) {
+      console.error("Error updating bank account:", error);
+      return res.status(500).json({ error: "Failed to update bank account" });
+    }
+  });
+
+  app.delete("/api/accounts/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteBankAccount(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Bank account not found" });
+      }
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting bank account:", error);
+      return res.status(500).json({ error: "Failed to delete bank account" });
+    }
+  });
+
   return httpServer;
 }

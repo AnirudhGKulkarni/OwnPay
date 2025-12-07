@@ -4,10 +4,12 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { CreditCard, Building2, Home } from "lucide-react";
+import { CreditCard, Building2, Home, History, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Checkout from "@/pages/checkout";
 import BankAccounts from "@/pages/bank-accounts";
+import Transactions from "@/pages/transactions";
+import Admin from "@/pages/admin";
 import Receipt from "@/pages/receipt";
 import NotFound from "@/pages/not-found";
 
@@ -43,6 +45,16 @@ function Navigation() {
               <span className="hidden sm:inline">Checkout</span>
             </Button>
           </Link>
+          <Link href="/transactions">
+            <Button 
+              variant={location === "/transactions" ? "secondary" : "ghost"} 
+              size="sm"
+              data-testid="nav-transactions"
+            >
+              <History className="h-4 w-4 mr-1.5" />
+              <span className="hidden sm:inline">Transactions</span>
+            </Button>
+          </Link>
           <Link href="/accounts">
             <Button 
               variant={location === "/accounts" ? "secondary" : "ghost"} 
@@ -50,7 +62,17 @@ function Navigation() {
               data-testid="nav-accounts"
             >
               <Building2 className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">Bank Accounts</span>
+              <span className="hidden sm:inline">Accounts</span>
+            </Button>
+          </Link>
+          <Link href="/admin">
+            <Button 
+              variant={location === "/admin" ? "secondary" : "ghost"} 
+              size="sm"
+              data-testid="nav-admin"
+            >
+              <LayoutDashboard className="h-4 w-4 mr-1.5" />
+              <span className="hidden sm:inline">Admin</span>
             </Button>
           </Link>
           <div className="ml-2 border-l pl-2">
@@ -66,7 +88,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Checkout} />
+      <Route path="/transactions" component={Transactions} />
       <Route path="/accounts" component={BankAccounts} />
+      <Route path="/admin" component={Admin} />
       <Route path="/receipt/:id" component={Receipt} />
       <Route component={NotFound} />
     </Switch>

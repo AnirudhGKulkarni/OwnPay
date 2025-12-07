@@ -1,7 +1,7 @@
 import { useRoute, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, XCircle, Copy, Check, CreditCard, Smartphone, Building2, ArrowLeft, Plus } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, XCircle, Copy, Check, CreditCard, Smartphone, Building2, ArrowLeft, Plus, Download } from "lucide-react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import type { Transaction } from "@shared/schema";
 export default function Receipt() {
   const [, params] = useRoute("/receipt/:id");
   const [copied, setCopied] = useState(false);
+  const receiptRef = useRef<HTMLDivElement>(null);
 
   const { data: transaction, isLoading, error } = useQuery<Transaction>({
     queryKey: ["/api/transactions", params?.id],
@@ -22,6 +23,41 @@ export default function Receipt() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const downloadReceipt = () => {
+    if (!transaction) return;
+    
+    const receiptContent = `
+PAYFLOW - PAYMENT RECEIPT
+========================
+
+Transaction ID: ${transaction.id}
+Order ID: ${transaction.orderId}
+Date: ${new Date(transaction.timestamp).toLocaleString("en-IN", { dateStyle: "full", timeStyle: "short" })}
+
+PAYMENT DETAILS
+---------------
+Amount: Rs. ${transaction.amount.toLocaleString()}
+Payment Method: ${transaction.paymentMethod.toUpperCase()}
+${transaction.bankName ? `Bank: ${transaction.bankName}` : ""}
+Status: ${transaction.status.toUpperCase()}
+${transaction.failureReason ? `Reason: ${transaction.failureReason}` : ""}
+
+========================
+This is a test transaction.
+No real money was transferred.
+    `.trim();
+
+    const blob = new Blob([receiptContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `receipt-${transaction.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
@@ -175,6 +211,16 @@ export default function Receipt() {
             </div>
 
             <div className="flex flex-col gap-3">
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                size="lg"
+                onClick={downloadReceipt}
+                data-testid="button-download-receipt"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Receipt
+              </Button>
               <Link href="/">
                 <Button className="w-full" size="lg" data-testid="button-new-payment">
                   <Plus className="h-4 w-4 mr-2" />

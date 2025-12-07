@@ -1,12 +1,15 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Building2, Plus, Wallet, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Building2, Plus, Wallet, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -45,8 +48,20 @@ function generateAccountNumber(): string {
 
 export default function BankAccounts() {
   const { toast } = useToast();
+  const [editingAccount, setEditingAccount] = useState<BankAccount | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState<BankAccount | null>(null);
 
   const form = useForm<BankAccountFormData>({
+    resolver: zodResolver(bankAccountSchema),
+    defaultValues: {
+      accountHolderName: "",
+      accountNumber: "",
+      bankName: "",
+      balance: "",
+    },
+  });
+
+  const editForm = useForm<BankAccountFormData>({
     resolver: zodResolver(bankAccountSchema),
     defaultValues: {
       accountHolderName: "",
@@ -87,8 +102,72 @@ export default function BankAccounts() {
     },
   });
 
+  const updateAccountMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: BankAccountFormData }) => {
+      const response = await apiRequest("PUT", `/api/accounts/${id}`, {
+        accountHolderName: data.accountHolderName,
+        accountNumber: data.accountNumber,
+        bankName: data.bankName,
+        balance: parseFloat(data.balance),
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
+      setEditingAccount(null);
+      toast({
+        title: "Account Updated",
+        description: "Bank account has been updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update bank account. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/accounts/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
+      setDeletingAccount(null);
+      toast({
+        title: "Account Deleted",
+        description: "Bank account has been deleted successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete bank account. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: BankAccountFormData) => {
     createAccountMutation.mutate(data);
+  };
+
+  const onEditSubmit = (data: BankAccountFormData) => {
+    if (editingAccount) {
+      updateAccountMutation.mutate({ id: editingAccount.id, data });
+    }
+  };
+
+  const openEditDialog = (account: BankAccount) => {
+    setEditingAccount(account);
+    editForm.reset({
+      accountHolderName: account.accountHolderName,
+      accountNumber: account.accountNumber,
+      bankName: account.bankName,
+      balance: account.balance.toString(),
+    });
   };
 
   const autoGenerateAccountNumber = () => {
@@ -293,6 +372,26 @@ export default function BankAccounts() {
                         <p className="text-xs text-muted-foreground">Balance</p>
                       </div>
                     </div>
+                    <div className="flex gap-2 mt-3 pt-3 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditDialog(account)}
+                        data-testid={`button-edit-${account.id}`}
+                      >
+                        <Pencil className="h-3 w-3 mr-1.5" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeletingAccount(account)}
+                        data-testid={`button-delete-${account.id}`}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1.5" />
+                        Delete
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -300,6 +399,146 @@ export default function BankAccounts() {
           )}
         </div>
       </div>
+
+      <Dialog open={!!editingAccount} onOpenChange={(open) => !open && setEditingAccount(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Bank Account</DialogTitle>
+            <DialogDescription>
+              Update the details for this test bank account
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="accountHolderName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs uppercase tracking-wide">Account Holder Name</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="John Doe" 
+                        {...field}
+                        data-testid="input-edit-account-holder-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="accountNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs uppercase tracking-wide">Account Number</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="1234567890123" 
+                        className="font-mono"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value.replace(/\D/g, ""))}
+                        data-testid="input-edit-account-number"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="bankName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs uppercase tracking-wide">Bank Name</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-bank-name">
+                          <SelectValue placeholder="Select a bank" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {bankOptions.map((bank) => (
+                          <SelectItem key={bank} value={bank}>
+                            {bank}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="balance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs uppercase tracking-wide">Balance (₹)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
+                        <Input 
+                          type="number"
+                          min="0"
+                          step="100"
+                          placeholder="50000" 
+                          className="pl-8 font-mono"
+                          {...field}
+                          data-testid="input-edit-balance"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingAccount(null)}
+                  data-testid="button-cancel-edit"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit"
+                  disabled={updateAccountMutation.isPending}
+                  data-testid="button-save-edit"
+                >
+                  {updateAccountMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deletingAccount} onOpenChange={(open) => !open && setDeletingAccount(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Bank Account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the account for {deletingAccount?.accountHolderName} at {deletingAccount?.bankName}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingAccount && deleteAccountMutation.mutate(deletingAccount.id)}
+              data-testid="button-confirm-delete"
+            >
+              {deleteAccountMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
