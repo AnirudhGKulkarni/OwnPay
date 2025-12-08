@@ -1,4 +1,4 @@
-import type { BankAccount, InsertBankAccount, Order, InsertOrder, Transaction } from "@shared/schema";
+import type { BankAccount, InsertBankAccount, Order, InsertOrder, Transaction, CreateOrderV2 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -11,6 +11,13 @@ export interface IStorage {
   
   createOrder(order: InsertOrder): Promise<Order>;
   getOrder(id: string): Promise<Order | undefined>;
+  // v2 order support
+  createOrderV2(order: CreateOrderV2): Promise<{
+    gateway_order_id: string;
+    one_time_order_token?: string;
+    redirect_url: string;
+  }>;
+  getOrderByMerchantId(merchantId: string, merchantOrderId: string): Promise<any | undefined>;
   
   createTransaction(transaction: Omit<Transaction, "id">): Promise<Transaction>;
   getTransaction(id: string): Promise<Transaction | undefined>;
@@ -20,11 +27,14 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private bankAccounts: Map<string, BankAccount>;
   private orders: Map<string, Order>;
+  // store v2 orders keyed by gateway_order_id
+  private v2orders: Map<string, any>;
   private transactions: Map<string, Transaction>;
 
   constructor() {
     this.bankAccounts = new Map();
     this.orders = new Map();
+    this.v2orders = new Map();
     this.transactions = new Map();
     
     this.seedInitialData();
@@ -88,6 +98,53 @@ export class MemStorage implements IStorage {
     const order: Order = { ...insertOrder, id };
     this.orders.set(id, order);
     return order;
+  }
+
+  async createOrderV2(order: CreateOrderV2): Promise<{
+    gateway_order_id: string;
+    one_time_order_token?: string;
+    redirect_url: string;
+  }> {
+    const gatewayOrderId = `gw_${randomUUID().slice(0, 8)}`;
+    const token = order.one_time_order_token ?? `ott_${randomUUID().replace(/-/g, "").slice(0, 40)}`;
+    const stored = {
+      gateway_order_id: gatewayOrderId,
+      merchant_id: order.merchant_id,
+      merchant_order_id: order.order_id,
+      one_time_order_token: token,
+      amount_in_paisa: order.amount_in_paisa,
+      currency: order.currency || "INR",
+      display_amount: order.display_amount,
+      customer: order.customer,
+      plan: order.plan,
+      return_url: order.return_url,
+      callback_url: order.callback_url,
+      test_mode: !!order.test_mode,
+      metadata: order.metadata,
+      idempotency_key: order.idempotency_key,
+      status: "CREATED",
+      created_at: new Date().toISOString(),
+    };
+
+    this.v2orders.set(gatewayOrderId, stored);
+
+    return {
+      gateway_order_id: gatewayOrderId,
+      one_time_order_token: token,
+      redirect_url: `https://localhost:5000/checkout?gw_order=${gatewayOrderId}`,
+    };
+  }
+
+  async getOrderByMerchantId(merchantId: string, merchantOrderId: string): Promise<any | undefined> {
+    for (const v of Array.from(this.v2orders.values())) {
+      if (v.merchant_id === merchantId && v.merchant_order_id === merchantOrderId) return v;
+    }
+    return undefined;
+  }
+
+  async getV2Order(gatewayOrderId: string): Promise<any | undefined> {
+    // @ts-ignore
+    return this.v2orders.get(gatewayOrderId);
   }
 
   async getOrder(id: string): Promise<Order | undefined> {

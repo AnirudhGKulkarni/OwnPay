@@ -2,6 +2,11 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import session from "express-session";
+// memorystore exports a function that expects the session library
+import memorystore from "memorystore";
+
+const MemoryStore = memorystore(session as any);
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,6 +26,22 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+// session middleware (used for demo of server-side session auto-login Pattern A)
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "dev_session_secret",
+    resave: false,
+    saveUninitialized: false,
+    store: new MemoryStore({ checkPeriod: 86400000 }), // prune expired every 24h
+    cookie: {
+      httpOnly: true,
+      secure: false, // set true in production (requires HTTPS)
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+    },
+  }),
+);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
